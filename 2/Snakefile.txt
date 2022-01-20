@@ -1,0 +1,173 @@
+#test1.py   
+import random            #用来随机产生卡号
+import pickle		     #序列化，用来存放和取出产生的用户数据
+import os                #产生文件
+import re               #正则表达式，用来判断身份证和手机号，其他地方也可以使用
+class Card:
+    def __init__(self,cardId,password,money=0):
+        self.cardId=cardId
+        self.password=password
+        self.money=money
+class User(Card):
+    def __init__(self,username,phone,uid,card):
+        self.username=username
+        self.phone=phone
+        self.uid=uid
+        self.user_card=card     #User继承Card对象
+class Bank(User):               #Bank 继承User，Bank是序列化的对象，所以将其变为字典
+    def __init__(self,user):
+        self.cardId=user.user_card.cardId      
+        self.user=user                 
+        self.users={self.cardId:self.user}  #键，卡号 ：值，User对象  
+
+def generate_cardid():     #方法一   产生卡号
+    list=[]
+    for i in range(0,11):
+        n=random.randint(0,9)
+        n=str(n)
+        list.append(n)
+    # str="".join(list)
+    return list
+# generate_cardid()
+# user_cardId=input("请输入您的账号：")
+def create_user():         #方法2:开户
+    while True:
+        uid=input("请输入身份证:")
+        realut=re.fullmatch("\d{17}[\d,X]",uid)   #正则判断身份证是否合理
+        if realut:
+            uid=realut.group()
+            break
+        else:
+            print("格式不合法")
+            continue
+    username=input("请输入姓名:")
+    while True:
+        phone=input("请输入手机号码:")
+        realut = re.fullmatch("1\d{10}", phone)  #正则判断手机号是否合理，其他需要判断的地方都可以判断，我就不再使用了
+        if realut:
+            phone=realut.group()
+            # print(phone)
+            break
+        else:
+            print("格式不合法")
+            continue
+    list=generate_cardid()     #得到卡号列表
+    cardId="".join(list)       #将卡号变成字符串，字符串的卡号才能做成键
+    print(f"您的卡号为：{cardId}")
+    while True:
+        password1=input("请输入密码:")
+        password2=input("再次输入密码确认:")
+        if password1==password2:
+            password=password1
+            break
+        else :
+            print("两次密码不同，请重新输入！")
+            continue
+    card=Card(cardId,password)     
+    user=User(uid,username,phone,card)
+    bank=Bank(user)     #产生bank对象
+    with open(f"data\\{cardId}.txt","ab") as file_w:  #重点：创建一个文件夹data来存放产生的bank对象，每个对象根据卡号产生一个txt文件，用来存放用户的所有数据
+        pickle.dump(bank,file_w)    #将bank 序列化保存到文档中
+# create_user()
+
+def user_login(user_cardId):     #登录
+
+    if os.path.exists(f"data\\{user_cardId}.txt"):
+        with open(f"data\\{user_cardId}.txt", "rb") as file_r:
+            u_data = pickle.load(file_r)    #根据卡号取出txt文档，反序列化取出数据
+            if u_data.cardId == user_cardId:  #u_data是一个字典，键是卡号，值是user对象 
+                n = 1
+                while True:
+                    if n <= 3:
+                        user_pw = input("请输入密码:")
+                        if u_data.user.user_card.password == user_pw:
+                            return True
+                        else:
+                            print("密码错误！")
+                            n+=1
+                            continue
+                    else:
+                        print("三次输入密码错误！")
+                        return
+    else:
+        print("没有该用户")
+
+# user_login(user_cardId)
+def save_money(user_cardId):     # 方法4:存钱
+    if user_login(user_cardId):    #如果登录成功
+        money=int(input("请您输入存钱金额："))
+        with open(f"data\\{user_cardId}.txt", "rb") as file_r:
+            u_data = pickle.load(file_r)
+            u_data.user.user_card.money=u_data.user.user_card.money+money
+            print("您的余额为:",u_data.user.user_card.money)
+            with open(f"data\\{user_cardId}.txt", "wb") as file_w: #这里要用wb,而不是ab,改变数据后，需要覆盖原来的数据，而不是添加
+                pickle.dump(u_data, file_w)
+# save_money()
+
+def withdraw_money(user_cardId):   # 方法5:取钱
+    if user_login(user_cardId):
+        money=int(input("请您输入取款金额："))
+        with open(f"data\\{user_cardId}.txt", "rb") as file_r:
+            u_data = pickle.load(file_r)
+            if money>u_data.user.user_card.money:
+                print("余额不足")
+            else:
+                u_data.user.user_card.money=u_data.user.user_card.money-money
+                print("您的余额为:", u_data.user.user_card.money)
+                with open(f"data\\{user_cardId}.txt", "wb") as file_w:
+                    pickle.dump(u_data, file_w)
+
+# withdraw_money()
+
+def transfer_accounts(user_cardId):     #方法6，转账
+    if user_login(user_cardId):
+        with open(f"data\\{user_cardId}.txt", "rb") as file_r:
+            u_data = pickle.load(file_r)
+            while True:
+                money = int(input("请您转账取款金额："))
+                if money > u_data.user.user_card.money:
+                    print("余额不足")
+                    break
+                else:
+                    cardId=int(input("请您对方卡号："))
+                    if os.path.exists(f"data\\{cardId}.txt"):       #如果对方卡号存在
+                        u_data.user.user_card.money = u_data.user.user_card.money - money    #自己的money减
+                        print("您的余额为:", u_data.user.user_card.money)
+                        with open(f"data\\{user_cardId}.txt", "wb") as file_w:
+                            pickle.dump(u_data, file_w)
+
+                        with open(f"data\\{cardId}.txt", "rb") as file_r1:     #根据对方的卡号进行查找对方的数据
+                            u_data1 = pickle.load(file_r1)
+                            with open(f"data\\{cardId}.txt", "wb") as file_w1:
+                                u_data1.user.user_card.money = u_data1.user.user_card.money + money     #对方money加
+                                pickle.dump(u_data1, file_w1)
+                                print("转账成功")
+                            break
+                    else:
+                        print("该用户不存在")
+                        break
+
+# transfer_accounts()
+
+def select_user(user_cardId): # 方法7:查询余额
+    if user_login(user_cardId):
+        with open(f"data\\{user_cardId}.txt", "rb") as file_r:
+            u_data = pickle.load(file_r)
+            print("您的余额为：",u_data.user.user_card.money)
+# select_user()
+
+def update_password(user_cardId):    # 方法8:修改密码
+    if user_login(user_cardId):
+        while True:
+            pw1=input("请输入新密码:")
+            pw2=input("请再次输入密码:")
+            if pw1==pw2:
+                with open(f"data\\{user_cardId}.txt", "rb") as file_r:
+                    u_data = pickle.load(file_r)
+                    u_data.user.user_card.password=pw1
+                with open(f"data\\{user_cardId}.txt", "wb") as file_w:
+                    pickle.dump(u_data, file_w)
+                	break
+            (else:
+                print("两次密码不相同")
+                continue)
